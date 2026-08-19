@@ -2,6 +2,15 @@ using UnityEngine;
 
 namespace CapyChaos.Input
 {
+    public enum SwipeDirection
+    {
+        None,
+        Left,
+        Right,
+        Up,
+        Down
+    }
+
     public struct RunnerCommand
     {
         public int LaneDelta;
@@ -13,7 +22,10 @@ namespace CapyChaos.Input
     public sealed class RunnerInput
     {
         private const float MinimumSwipeDistance = 55f;
+        private const float ScreenSwipeRatio = 0.06f;
+        private const float MaximumSwipeDuration = 1.25f;
         private Vector2 touchStart;
+        private float touchStartTime;
         private bool trackingTouch;
 
         public RunnerCommand Read()
@@ -57,6 +69,7 @@ namespace CapyChaos.Input
             if (touch.phase == TouchPhase.Began)
             {
                 touchStart = touch.position;
+                touchStartTime = Time.unscaledTime;
                 trackingTouch = true;
                 return;
             }
@@ -68,22 +81,46 @@ namespace CapyChaos.Input
 
             trackingTouch = false;
             Vector2 swipe = touch.position - touchStart;
-            if (swipe.magnitude < MinimumSwipeDistance)
+            float threshold = Mathf.Max(MinimumSwipeDistance, Mathf.Min(Screen.width, Screen.height) * ScreenSwipeRatio);
+            if (Time.unscaledTime - touchStartTime > MaximumSwipeDuration)
             {
                 return;
             }
 
+            ApplySwipe(InterpretSwipe(swipe, threshold), ref command);
+        }
+
+        public static SwipeDirection InterpretSwipe(Vector2 swipe, float minimumDistance)
+        {
+            if (swipe.sqrMagnitude < minimumDistance * minimumDistance)
+            {
+                return SwipeDirection.None;
+            }
+
             if (Mathf.Abs(swipe.x) > Mathf.Abs(swipe.y))
             {
-                command.LaneDelta = swipe.x > 0f ? 1 : -1;
+                return swipe.x > 0f ? SwipeDirection.Right : SwipeDirection.Left;
             }
-            else if (swipe.y > 0f)
+
+            return swipe.y > 0f ? SwipeDirection.Up : SwipeDirection.Down;
+        }
+
+        private static void ApplySwipe(SwipeDirection direction, ref RunnerCommand command)
+        {
+            switch (direction)
             {
-                command.Jump = true;
-            }
-            else
-            {
-                command.Slide = true;
+                case SwipeDirection.Left:
+                    command.LaneDelta = -1;
+                    break;
+                case SwipeDirection.Right:
+                    command.LaneDelta = 1;
+                    break;
+                case SwipeDirection.Up:
+                    command.Jump = true;
+                    break;
+                case SwipeDirection.Down:
+                    command.Slide = true;
+                    break;
             }
         }
     }

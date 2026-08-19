@@ -11,10 +11,22 @@ namespace CapyChaos.Environment
         private readonly Queue<ThemeTile> tiles = new Queue<ThemeTile>();
         private Transform runner;
         private int nextTileIndex;
+        private TrackObjectPool objectPool;
 
         public void Initialize(Transform runnerTransform)
         {
+            if (tiles.Count > 0)
+            {
+                return;
+            }
+
             runner = runnerTransform;
+            objectPool = GetComponent<TrackObjectPool>();
+            if (objectPool == null)
+            {
+                objectPool = gameObject.AddComponent<TrackObjectPool>();
+            }
+
             for (int i = 0; i < TileCount; i++)
             {
                 ThemeTile tile = CreateTile();
@@ -51,7 +63,9 @@ namespace CapyChaos.Environment
         {
             GameObject tileObject = new GameObject("Theme Tile");
             tileObject.transform.SetParent(transform, false);
-            return tileObject.AddComponent<ThemeTile>();
+            ThemeTile tile = tileObject.AddComponent<ThemeTile>();
+            tile.Initialize(objectPool);
+            return tile;
         }
 
         private static void PositionTile(ThemeTile tile, int index)
@@ -65,7 +79,25 @@ namespace CapyChaos.Environment
     {
         private const float TileLength = 30f;
         private const float TileWidth = 10f;
-        private readonly List<GameObject> content = new List<GameObject>();
+        private readonly List<PooledContent> content = new List<PooledContent>();
+        private TrackObjectPool objectPool;
+
+        private readonly struct PooledContent
+        {
+            public PooledContent(GameObject item, TrackObjectKind kind)
+            {
+                Item = item;
+                Kind = kind;
+            }
+
+            public GameObject Item { get; }
+            public TrackObjectKind Kind { get; }
+        }
+
+        public void Initialize(TrackObjectPool pool)
+        {
+            objectPool = pool;
+        }
 
         public void Configure(int tileIndex, BrazilTheme theme, int variant)
         {
@@ -85,26 +117,42 @@ namespace CapyChaos.Environment
 
         private void CreateGameplay(int tileIndex, ThemeDefinition definition)
         {
-            int obstacleLane = (tileIndex * 7 % 3) - 1;
-            float obstacleX = obstacleLane * 2.6f;
-            GameObject obstacle = CreateBlock("Obstacle", new Vector3(obstacleX, 0.55f, 2f), new Vector3(1.35f, 1.1f, 1.2f), definition.Secondary, true);
-            obstacle.AddComponent<RunnerObstacle>();
-
-            int coinLane = obstacleLane == 0 ? 1 : 0;
-            for (int i = 0; i < 4; i++)
+            DifficultyProfile difficulty = DifficultyProgression.Evaluate(tileIndex);
+            int firstObstacleLane = (tileIndex * 7 % 3) - 1;
+            for (int i = 0; i < difficulty.ObstacleCount; i++)
             {
-                GameObject coin = CreatePrimitive("Coin", PrimitiveType.Cylinder, new Vector3(coinLane * 2.6f, 1.05f, -7f + i * 2.1f), new Vector3(0.18f, 0.48f, 0.48f), new Color(1f, 0.76f, 0.08f));
+                int lane = ((firstObstacleLane + 1 + i * 2) % 3 + 3) % 3 - 1;
+                bool overhead = difficulty.OverheadObstaclesEnabled && (tileIndex + i) % 3 == 0;
+                Vector3 position = new Vector3(lane * 2.6f, overhead ? 1.65f : 0.55f, -1f + i * 6.5f);
+                Vector3 scale = overhead ? new Vector3(1.55f, 0.7f, 0.9f) : new Vector3(1.35f, 1.1f, 1.2f);
+                GameObject obstacle = CreateBlock(overhead ? "Overhead Obstacle" : "Jump Obstacle", position, scale, definition.Secondary, true, TrackObjectKind.Obstacle);
+                if (obstacle.GetComponent<RunnerObstacle>() == null)
+                {
+                    obstacle.AddComponent<RunnerObstacle>();
+                }
+            }
+
+            int coinLane = firstObstacleLane == 0 ? 1 : 0;
+            for (int i = 0; i < difficulty.CoinCount; i++)
+            {
+                GameObject coin = CreatePrimitive("Coin", PrimitiveType.Cylinder, new Vector3(coinLane * 2.6f, 1.05f, -10f + i * 1.8f), new Vector3(0.18f, 0.48f, 0.48f), new Color(1f, 0.76f, 0.08f), TrackObjectKind.Coin);
                 coin.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
                 Collider collider = coin.GetComponent<Collider>();
                 collider.isTrigger = true;
-                coin.AddComponent<CoinPickup>();
+                if (coin.GetComponent<CoinPickup>() == null)
+                {
+                    coin.AddComponent<CoinPickup>();
+                }
             }
 
             if (tileIndex % 5 == 0)
             {
-                GameObject boost = CreatePrimitive("Zoomies", PrimitiveType.Sphere, new Vector3(-coinLane * 2.6f, 1.15f, -2f), Vector3.one * 0.75f, new Color(0.18f, 0.9f, 0.95f));
+                GameObject boost = CreatePrimitive("Zoomies", PrimitiveType.Sphere, new Vector3(-coinLane * 2.6f, 1.15f, -7f), Vector3.one * 0.75f, new Color(0.18f, 0.9f, 0.95f), TrackObjectKind.Zoomies);
                 boost.GetComponent<Collider>().isTrigger = true;
-                boost.AddComponent<ZoomiesPickup>();
+                if (boost.GetComponent<ZoomiesPickup>() == null)
+                {
+                    boost.AddComponent<ZoomiesPickup>();
+                }
             }
         }
 
@@ -198,9 +246,9 @@ namespace CapyChaos.Environment
             }
         }
 
-        private GameObject CreateBlock(string name, Vector3 position, Vector3 scale, Color color, bool colliderEnabled)
+        private GameObject CreateBlock(string name, Vector3 position, Vector3 scale, Color color, bool colliderEnabled, TrackObjectKind kind = TrackObjectKind.Block)
         {
-            GameObject block = CreatePrimitive(name, PrimitiveType.Cube, position, scale, color);
+            GameObject block = CreatePrimitive(name, PrimitiveType.Cube, position, scale, color, kind);
             Collider collider = block.GetComponent<Collider>();
             if (collider != null)
             {
@@ -209,15 +257,22 @@ namespace CapyChaos.Environment
             return block;
         }
 
-        private GameObject CreatePrimitive(string name, PrimitiveType primitiveType, Vector3 position, Vector3 scale, Color color)
+        private GameObject CreatePrimitive(string name, PrimitiveType primitiveType, Vector3 position, Vector3 scale, Color color, TrackObjectKind? requestedKind = null)
         {
-            GameObject item = GameObject.CreatePrimitive(primitiveType);
+            TrackObjectKind kind = requestedKind ?? KindFor(primitiveType);
+            GameObject item = objectPool.Rent(kind, primitiveType, transform);
             item.name = name;
-            item.transform.SetParent(transform, false);
             item.transform.localPosition = position;
+            item.transform.localRotation = Quaternion.identity;
             item.transform.localScale = scale;
             item.GetComponent<Renderer>().sharedMaterial = MaterialPalette.Get(color);
-            content.Add(item);
+            Collider collider = item.GetComponent<Collider>();
+            if (collider != null)
+            {
+                collider.enabled = true;
+                collider.isTrigger = false;
+            }
+            content.Add(new PooledContent(item, kind));
             return item;
         }
 
@@ -225,12 +280,22 @@ namespace CapyChaos.Environment
         {
             for (int i = 0; i < content.Count; i++)
             {
-                if (content[i] != null)
-                {
-                    Destroy(content[i]);
-                }
+                objectPool.Return(content[i].Kind, content[i].Item);
             }
             content.Clear();
+        }
+
+        private static TrackObjectKind KindFor(PrimitiveType primitiveType)
+        {
+            switch (primitiveType)
+            {
+                case PrimitiveType.Cylinder:
+                    return TrackObjectKind.Cylinder;
+                case PrimitiveType.Sphere:
+                    return TrackObjectKind.Sphere;
+                default:
+                    return TrackObjectKind.Block;
+            }
         }
     }
 
