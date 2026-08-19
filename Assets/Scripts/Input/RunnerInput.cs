@@ -42,6 +42,22 @@ namespace CapyChaos.Input
             return command;
         }
 
+        public static bool IsRestartRequested()
+        {
+            if (UnityEngine.Input.GetKeyDown(KeyCode.R) || UnityEngine.Input.GetKeyDown(KeyCode.Space))
+            {
+                return true;
+            }
+
+            if (UnityEngine.Input.touchCount == 0)
+            {
+                return false;
+            }
+
+            Touch touch = UnityEngine.Input.GetTouch(0);
+            return touch.phase == TouchPhase.Ended;
+        }
+
         private static int ReadKeyboardLane()
         {
             if (UnityEngine.Input.GetKeyDown(KeyCode.A) || UnityEngine.Input.GetKeyDown(KeyCode.LeftArrow))

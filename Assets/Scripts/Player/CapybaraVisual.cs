@@ -1,3 +1,4 @@
+using CapyChaos.Rendering;
 using UnityEngine;
 
 namespace CapyChaos.Player
@@ -112,9 +113,7 @@ namespace CapyChaos.Player
 
         private static Material CreateMaterial(string name, Color color)
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            Material material = new Material(shader) { name = name, color = color };
-            return material;
+            return RuntimeMaterialFactory.Create(name, color);
         }
     }
 }

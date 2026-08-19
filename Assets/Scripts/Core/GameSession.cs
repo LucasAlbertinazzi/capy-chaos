@@ -1,4 +1,6 @@
 using System;
+using CapyChaos.Gameplay;
+using CapyChaos.Input;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -12,12 +14,10 @@ namespace CapyChaos.Core
 
     public sealed class GameSession : MonoBehaviour
     {
-        [SerializeField] private float baseSpeed = 8f;
-        [SerializeField] private float accelerationPerSecond = 0.08f;
-        [SerializeField] private float maximumSpeed = 20f;
-        [SerializeField] private float zoomiesMultiplier = 1.65f;
+        [SerializeField] private RunDifficultySettings difficultySettings;
 
         private float zoomiesRemaining;
+        private RunDifficultyTuning activeTuning;
 
         public event Action StateChanged;
 
@@ -26,20 +26,27 @@ namespace CapyChaos.Core
         public int Coins { get; private set; }
         public int Score => RunnerRules.CalculateScore(Distance, Coins);
         public bool IsZoomiesActive => zoomiesRemaining > 0f;
-        public float CurrentSpeed
+        public RunDifficultyTuning DifficultyTuning => activeTuning;
+        public string DifficultyName => activeTuning.DisplayName;
+        public float CurrentSpeed => SpeedProgression.Calculate(Distance, activeTuning, IsZoomiesActive);
+
+        private void Awake()
         {
-            get
+            if (difficultySettings == null)
             {
-                float normalSpeed = Mathf.Min(maximumSpeed, baseSpeed + Distance * accelerationPerSecond);
-                return IsZoomiesActive ? normalSpeed * zoomiesMultiplier : normalSpeed;
+                difficultySettings = Resources.Load<RunDifficultySettings>(RunDifficultySettings.ResourcePath);
             }
+
+            activeTuning = difficultySettings != null
+                ? difficultySettings.Standard
+                : RunDifficultySettings.GetDefault();
         }
 
         private void Update()
         {
             if (State != RunState.Running)
             {
-                if (UnityEngine.Input.GetKeyDown(KeyCode.R) || UnityEngine.Input.GetKeyDown(KeyCode.Space))
+                if (RunnerInput.IsRestartRequested())
                 {
                     Restart();
                 }

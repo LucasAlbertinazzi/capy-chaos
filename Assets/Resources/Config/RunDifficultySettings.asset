@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a28d51a42ada524189b8fe4a671fa59, type: 3}
+  m_Name: RunDifficultySettings
+  m_EditorClassIdentifier: Assembly-CSharp::CapyChaos.Gameplay.RunDifficultySettings
+  standard:
+    displayName: "PADR\xC3O"
+    initialSpeed: 7.5
+    accelerationPerMeter: 0.0025
+    maximumSpeed: 18
+    zoomiesMultiplier: 1.65
+    obstacleTileOffset: 0

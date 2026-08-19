@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using CapyChaos.Gameplay;
+using CapyChaos.Rendering;
 using UnityEngine;
 
 namespace CapyChaos.Environment
@@ -12,8 +13,9 @@ namespace CapyChaos.Environment
         private Transform runner;
         private int nextTileIndex;
         private TrackObjectPool objectPool;
+        private RunDifficultyTuning difficultyTuning;
 
-        public void Initialize(Transform runnerTransform)
+        public void Initialize(Transform runnerTransform, RunDifficultyTuning tuning)
         {
             if (tiles.Count > 0)
             {
@@ -21,6 +23,7 @@ namespace CapyChaos.Environment
             }
 
             runner = runnerTransform;
+            difficultyTuning = tuning;
             objectPool = GetComponent<TrackObjectPool>();
             if (objectPool == null)
             {
@@ -68,10 +71,10 @@ namespace CapyChaos.Environment
             return tile;
         }
 
-        private static void PositionTile(ThemeTile tile, int index)
+        private void PositionTile(ThemeTile tile, int index)
         {
             tile.transform.position = new Vector3(0f, 0f, index * TileLength + TileLength * 0.5f);
-            tile.Configure(index, ThemeSequence.GetTheme(index), ThemeSequence.GetVariant(index));
+            tile.Configure(index, ThemeSequence.GetTheme(index), ThemeSequence.GetVariant(index), difficultyTuning);
         }
     }
 
@@ -99,7 +102,7 @@ namespace CapyChaos.Environment
             objectPool = pool;
         }
 
-        public void Configure(int tileIndex, BrazilTheme theme, int variant)
+        public void Configure(int tileIndex, BrazilTheme theme, int variant, RunDifficultyTuning tuning)
         {
             gameObject.name = $"Tile {tileIndex:000} - {theme} v{variant + 1}";
             ClearContent();
@@ -111,13 +114,13 @@ namespace CapyChaos.Environment
 
             if (tileIndex > 0)
             {
-                CreateGameplay(tileIndex, definition);
+                CreateGameplay(tileIndex, definition, tuning);
             }
         }
 
-        private void CreateGameplay(int tileIndex, ThemeDefinition definition)
+        private void CreateGameplay(int tileIndex, ThemeDefinition definition, RunDifficultyTuning tuning)
         {
-            DifficultyProfile difficulty = DifficultyProgression.Evaluate(tileIndex);
+            DifficultyProfile difficulty = DifficultyProgression.Evaluate(tileIndex, tuning);
             int firstObstacleLane = (tileIndex * 7 % 3) - 1;
             for (int i = 0; i < difficulty.ObstacleCount; i++)
             {
@@ -310,8 +313,7 @@ namespace CapyChaos.Environment
                 return material;
             }
 
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            material = new Material(shader) { color = color, enableInstancing = true };
+            material = RuntimeMaterialFactory.Create($"Track {ColorUtility.ToHtmlStringRGBA(color)}", color, true);
             Materials.Add(color, material);
             return material;
         }

@@ -1,5 +1,6 @@
 using CapyChaos.Environment;
 using CapyChaos.Player;
+using CapyChaos.Services;
 using CapyChaos.UI;
 using UnityEngine;
 
@@ -25,13 +26,15 @@ namespace CapyChaos.Core
             GameSession session = GetOrCreate<GameSession>("Game Session");
             CapybaraRunner runner = CreateRunner();
             ProceduralTrack track = GetOrCreate<ProceduralTrack>("Brazil Theme Track");
-            track.Initialize(runner.transform);
+            track.Initialize(runner.transform, session.DifficultyTuning);
 
             Camera camera = ConfigureCamera(runner.transform);
             ConfigureLighting();
 
+            LeaderboardCoordinator leaderboard = GetOrCreate<LeaderboardCoordinator>("Global Leaderboard");
+            leaderboard.Initialize(session);
             PrototypeHud hud = GetOrCreate<PrototypeHud>("Prototype HUD");
-            hud.Initialize(session, track, runner.transform);
+            hud.Initialize(session, track, runner.transform, leaderboard);
             camera.gameObject.AddComponent<CameraFollow>().Initialize(runner.transform);
         }
 
